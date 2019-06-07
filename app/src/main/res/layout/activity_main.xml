@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity"
+    >
+    <androidx.recyclerview.widget.RecyclerView
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:layout_margin="20dp"
+        android:id="@+id/deviceRecyclerView"
+        android:background="@android:color/holo_orange_light"
+        >
+    </androidx.recyclerview.widget.RecyclerView>
+
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/deviceRecyclerView"
+        android:layout_margin="20dp"
+        android:text="Scan"
+        android:id="@+id/scan"
+        />
+
+
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="connect"
+        android:layout_alignParentRight="true"
+        android:layout_margin="20dp"
+        android:layout_below="@id/deviceRecyclerView"
+        android:id="@+id/connect"
+        />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:text="Hello"
+        android:textSize="30dp"
+        android:layout_below="@+id/deviceRecyclerView"
+        android:id="@+id/status"
+        android:layout_alignTop="@+id/scan"
+        />
+    <EditText
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Set Message Here"
+        android:layout_margin="20dp"
+        android:id="@+id/sendText"
+        android:layout_alignParentBottom="true"
+        android:background="@color/colorAccent"
+        android:textSize="20dp"
+        />
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Send"
+        android:layout_alignParentRight="true"
+        android:layout_above="@+id/sendText"
+        android:id="@+id/send"
+        />
+
+
+
+</RelativeLayout>
+
+
+
+
+
