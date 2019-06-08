@@ -5,6 +5,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.content.BroadcastReceiver;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.net.wifi.WifiManager;
@@ -14,7 +15,10 @@ import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pDeviceList;
 import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -23,10 +27,20 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     RecyclerView deviceRecyclerView;
@@ -44,6 +58,14 @@ public class MainActivity extends AppCompatActivity {
     WifiP2pDevice wifiP2pDevice;
     WifiP2pConfig config;
     String host;
+    String message;
+    OutputStream clientOutputStream;
+    ByteArrayOutputStream byteArrayOutputStream;
+    ExecutorService executorService;
+    InputStream clientInputStream;
+    Handler handler;
+    SendReceiveThread sendReceiveThread;
+    static final int MESSAGETOREAD =1;
 
     WifiP2pManager.Channel channel;
     @Override
@@ -74,7 +96,7 @@ public class MainActivity extends AppCompatActivity {
                 });}catch (NullPointerException e)
                {
                    e.printStackTrace();
-                   Toast.makeText(MainActivity.this,"Please select a deivice from the list to connect to ",Toast.LENGTH_SHORT).show();
+                   Toast.makeText(MainActivity.this,"Please select a device from the list to connect to ",Toast.LENGTH_SHORT).show();
                }
             }
         });
@@ -129,12 +151,28 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        send.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                message = messageSend.getText().toString();
+                try {
+                    sendReceiveThread.write(message.getBytes());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+
+            }
+        });
+
 
 
 
 
 
     }
+
 
     void requestPeers()
     {
@@ -163,6 +201,28 @@ public class MainActivity extends AppCompatActivity {
         peersArraylist = new ArrayList<>();
         config= new WifiP2pConfig();
         config.wps.setup= WpsInfo.PBC;
+        executorService = Executors.newFixedThreadPool(10);
+        handler = new Handler(new Handler.Callback() {
+            @Override
+            public boolean handleMessage(Message msg) {
+                switch (msg.what)
+                {
+                    case MESSAGETOREAD:
+                        byte [] buff = new byte[1024];
+                        String message = new String(buff);
+                        for(byte e:buff)
+                        {
+                            Log.e(TAG, "handleMessage: " + (int)e );
+                        }
+                        //Log.e(TAG, "handleMessage: " + buff );
+                        messageSend.setText(message);
+                        break;
+                }
+
+
+                return true;
+            }
+        });
 
     }
 
@@ -196,12 +256,15 @@ public class MainActivity extends AppCompatActivity {
                 // (server).
                 if (info.groupFormed && info.isGroupOwner) {
                     status.setText("Is Host");
-
+                    ServerThread serverThread = new ServerThread();
+                    serverThread.execute();
                     // Do whatever tasks are specific to the group owner.
                     // One common case is creating a group owner thread and accepting
                     // incoming connections.
                 } else if (info.groupFormed) {
                     status.setText("is Client");
+                    ClientClass clientClass = new ClientClass(groupOwnerAddress);
+                    clientClass.start();
                     // The other device acts as the peer (client). In this case,
                     // you'll want to create a peer thread that connects
                     // to the group owner.
@@ -210,18 +273,119 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    class ClientClass extends  Thread{
+    final int port = 8888;
+    InetAddress inetAddress;
+    Socket socket ;
+    byte buf[]  = new byte[1024];
+    String hostAddress;
+
+    public ClientClass(InetAddress inetAddress) {
+        this.inetAddress = inetAddress;
+        hostAddress = inetAddress.getHostAddress();
+        socket = new Socket();
+    }
+
+    @Override
+    public void run() {
+        try {
+            socket.connect(new InetSocketAddress(hostAddress, port), 500);
+            sendReceiveThread = new SendReceiveThread(socket);
+            sendReceiveThread.start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+}
+
+    class ServerThread extends AsyncTask<Void,Void,Void> {
+        InputStream inputStream;
+        OutputStream outputStream;
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            try {
+                Log.e(TAG, "run: " + "Server Made ...");
+                ServerSocket serverSocket = new ServerSocket(8888);
+                Socket socket = serverSocket.accept();
+                 sendReceiveThread = new SendReceiveThread(socket);
+                 sendReceiveThread.start();
+                Log.e(TAG, "run: IS Bound ?" + serverSocket.isBound());
 
 
-    void makeServer()
-    {
+            }catch (IOException e)
+            {
+                e.printStackTrace();
+            }
+            return null;
+        }
+    }
+
+
+    class SendReceiveThread extends Thread{
+        Socket socket;
+        InputStream inputStream;
+        OutputStream outputStream;
+        byte [] buffer = new byte[1024];
+        int bytes;
+
+        @Override
+        public void run() {
+            try {
+                while (socket!=null) {
+                    bytes = inputStream.read(buffer);
+                    if(bytes>0)
+                    {
+                        Log.e(TAG, "run: String" + new String(buffer)  );
+
+
+                       handler.post(new Runnable() {
+                           @Override
+                           public void run() {
+                               messageSend.setText(new StringBuffer(String.valueOf(buffer)));
+                           }
+                       });
+                    }
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public SendReceiveThread(Socket socket) {
+            this.socket = socket;
+            try {
+                inputStream = socket.getInputStream();
+                outputStream = socket.getOutputStream();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+
+        public void write(final byte[] bytes) throws IOException {
+            Log.e(TAG, "write: "+  bytes.toString() );
+           Runnable runnable = new Runnable() {
+               @Override
+               public void run() {
+                   try {
+                       Log.e(TAG, "run: " + bytes );
+                       outputStream.write(bytes);
+                   } catch (IOException e) {
+                       e.printStackTrace();
+                   }
+               }
+           };new Thread(runnable).start();
+
+
+        }
 
     }
 
 
-    void makeClient(String hostAddress)
-    {
 
-    }
 
 
 
